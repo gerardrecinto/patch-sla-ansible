@@ -1,0 +1,24 @@
+---
+# Clone a VM from a template on a Proxmox VE cluster. Pass the API password in the environment.
+- name: Provision a VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    pve_host: pve-01
+    pve_user: automation@pve
+    vm_name: pcs-test-01
+    template: rt-base
+    node: pve-01
+  tasks:
+    - name: Clone from template
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ pve_host }}"
+        api_user: "{{ pve_user }}"
+        api_password: "{{ lookup('env', 'PVE_PASSWORD') }}"
+        node: "{{ node }}"
+        name: "{{ vm_name }}"
+        clone: "{{ template }}"
+        full: true
+        state: present
+        timeout: 300

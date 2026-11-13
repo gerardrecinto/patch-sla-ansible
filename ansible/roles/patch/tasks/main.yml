@@ -1,0 +1,35 @@
+---
+# Apply security updates one host at a time and never during a run.
+- name: Check for a run in progress
+  ansible.builtin.stat:
+    path: "{{ run_flag_file }}"
+  register: run_flag
+
+- name: Skip hosts that are mid-run
+  ansible.builtin.meta: end_host
+  when: run_flag.stat.exists
+
+- name: Apply security updates
+  ansible.builtin.dnf:
+    name: "*"
+    security: true
+    state: latest
+  register: updates
+
+- name: Check whether a reboot is needed
+  ansible.builtin.command: needs-restarting -r
+  register: needs_reboot
+  changed_when: false
+  failed_when: needs_reboot.rc not in [0, 1]
+
+- name: Reboot when needed
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+  when: needs_reboot.rc == 1 and patch_allow_reboot
+
+- name: Record the patch time for the SLA report
+  ansible.builtin.copy:
+    dest: /var/lib/patchsla.last
+    content: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}\n"
+    mode: "0644"
+  when: updates is changed

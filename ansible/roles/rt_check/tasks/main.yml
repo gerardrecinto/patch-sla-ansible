@@ -1,0 +1,25 @@
+---
+# Fails the play when a host that must be real-time is not.
+- name: Read kernel version string
+  ansible.builtin.command: uname -v
+  register: kver
+  changed_when: false
+
+- name: Read kernel command line
+  ansible.builtin.slurp:
+    src: /proc/cmdline
+  register: cmdline
+
+- name: Read the active tuned profile
+  ansible.builtin.command: tuned-adm active
+  register: tuned
+  changed_when: false
+  failed_when: false
+
+- name: Assert real-time settings
+  ansible.builtin.assert:
+    that:
+      - "'PREEMPT_RT' in kver.stdout"
+      - "'isolcpus' in (cmdline.content | b64decode)"
+      - "'realtime' in tuned.stdout"
+    fail_msg: "{{ inventory_hostname }} is not set up for real-time work"

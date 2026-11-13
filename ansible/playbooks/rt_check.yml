@@ -1,0 +1,6 @@
+---
+- name: Real-time readiness
+  hosts: pcs
+  become: true
+  roles:
+    - rt_check
