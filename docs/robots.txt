@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://gerardrecinto.github.io/patch-sla-ansible/sitemap.xml

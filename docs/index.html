@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>patch-sla-ansible | Patch on a clock, and prove it</title>
+<meta name="description" content="Ansible security patching that skips hosts mid-run, plus a checker that fails the build when a critical finding passes 48 hours.">
+<link rel="canonical" href="https://gerardrecinto.github.io/patch-sla-ansible/"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="theme-color" content="#0a0f1c">
+<meta property="og:type" content="website"><meta property="og:title" content="patch-sla-ansible | Patch on a clock, and prove it"><meta property="og:description" content="Ansible security patching that skips hosts mid-run, plus a checker that fails the build when a critical finding passes 48 hours."><meta property="og:url" content="https://gerardrecinto.github.io/patch-sla-ansible/">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="patch-sla-ansible | Patch on a clock, and prove it"><meta name="twitter:description" content="Ansible security patching that skips hosts mid-run, plus a checker that fails the build when a critical finding passes 48 hours.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f7f9fc;--surface:#fff;--border:#d8dfeb;--fg:#0f172a;--muted:#475569;--acc:#059669;--acc-fg:#fff;--risk:#b45309;--code:#0b1220;--code-fg:#dbe4f5}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0a0f1c;--surface:#111a2e;--border:#22304e;--fg:#e8edf7;--muted:#9aa8c2;--acc:#34d399;--acc-fg:#04130d;--risk:#fbbf24;--code:#070b15;--code-fg:#dbe4f5}}
+:root[data-theme=dark]{--bg:#0a0f1c;--surface:#111a2e;--border:#22304e;--fg:#e8edf7;--muted:#9aa8c2;--acc:#34d399;--acc-fg:#04130d;--risk:#fbbf24;--code:#070b15;--code-fg:#dbe4f5}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 17px/1.6 Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+.mono,code,pre{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+a{color:var(--acc)}a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--acc);color:var(--acc-fg);padding:8px 12px;border-radius:8px;z-index:20}.skip:focus{left:8px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 80%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--border)}
+header .wrap{display:flex;align-items:center;justify-content:space-between;height:56px;gap:12px}
+.brand{font:600 14px 'JetBrains Mono',monospace;color:var(--fg);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+nav{display:flex;gap:4px;font:500 13px 'JetBrains Mono',monospace}nav a{color:var(--muted);text-decoration:none;padding:8px 10px;border-radius:8px}nav a:hover{color:var(--fg);background:var(--surface)}
+@media(max-width:640px){nav a.opt{display:none}}
+.hero{padding-top:72px;padding-bottom:40px}.eyebrow{font:500 13px 'JetBrains Mono',monospace;color:var(--acc);letter-spacing:.04em;text-transform:uppercase;margin:0 0 16px}
+h1{font-size:clamp(2.2rem,6vw,4rem);line-height:1.08;letter-spacing:-.03em;font-weight:800;margin:0 0 20px;max-width:16em}
+.sub{font-size:1.15rem;color:var(--muted);max-width:42em;margin:0 0 28px}
+.btns{display:flex;gap:12px;flex-wrap:wrap}.btn{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:10px;font:600 15px Inter,sans-serif;text-decoration:none;border:1px solid var(--border);color:var(--fg);background:var(--surface)}
+.btn.p{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}.btn:hover{filter:brightness(1.06)}
+.term{margin:36px 0 0;background:var(--code);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.term .bar{display:flex;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid #1c2740;font:500 12px 'JetBrains Mono',monospace;color:#8da0c4}
+.term pre{margin:0;padding:16px;overflow-x:auto;color:var(--code-fg);font-size:13.5px;line-height:1.65}
+.term .ok{color:#34d399}.term .bad{color:#fbbf24}.term .dim{color:#7f8fb0}
+section{padding:56px 0;border-top:1px solid var(--border)}
+h2{font-size:clamp(1.5rem,3.4vw,2.1rem);line-height:1.2;letter-spacing:-.02em;font-weight:800;margin:0 0 12px;max-width:24em}
+.lead{color:var(--muted);max-width:42em;margin:0 0 28px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px}.card h3{margin:0 0 6px;font-size:1.02rem}.card p{margin:0;color:var(--muted);font-size:.95rem}.card .f{display:block;margin-top:10px;font:500 12px 'JetBrains Mono',monospace;color:var(--acc);overflow-wrap:anywhere}
+.cmd{position:relative}.cmd pre{margin:0;padding:18px 70px 18px 18px;background:var(--code);color:var(--code-fg);border:1px solid var(--border);border-radius:14px;overflow-x:auto;font-size:13.5px;line-height:1.7}
+.copy{position:absolute;top:10px;right:10px;min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #2a3858;background:#111a2e;color:#cbd6ee;font:600 12px 'JetBrains Mono',monospace;cursor:pointer}
+.two{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.box{border-radius:14px;padding:22px;border:1px solid var(--border);background:var(--surface)}.box h3{margin:0 0 10px;font:600 13px 'JetBrains Mono',monospace;letter-spacing:.04em;text-transform:uppercase}
+.box.g h3{color:var(--acc)}.box.a h3{color:var(--risk)}.box ul{margin:0;padding-left:18px;color:var(--muted);font-size:.95rem}.box li{margin:6px 0}
+details{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0 18px;margin:10px 0}summary{cursor:pointer;padding:16px 0;font-weight:600;list-style:none}summary::-webkit-details-marker{display:none}summary::after{content:'+';float:right;color:var(--acc);font-family:'JetBrains Mono',monospace}details[open] summary::after{content:'-'}details p{margin:0 0 16px;color:var(--muted)}
+footer{padding:40px 0 56px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><div class="wrap"><a class="brand" href="./">patch-sla-ansible</a>
+<nav aria-label="Main"><a class="opt" href="#what">What it does</a><a class="opt" href="#run">Run it</a><a href="#real">Real vs not</a><a href="https://github.com/gerardrecinto/patch-sla-ansible">GitHub</a></nav></div></header>
+<main id="main">
+<div class="wrap hero">
+<p class="eyebrow">Ansible, patching, SLA evidence</p>
+<h1>Patch the hosts that cannot stop mid-run. Then prove it was fast enough.</h1>
+<p class="sub">Ansible security patching that never touches a host in the middle of a run, and a checker that fails the build when a critical finding is still open after 48 hours.</p>
+<div class="btns"><a class="btn p" href="#run">Run it in a minute</a><a class="btn" href="https://github.com/gerardrecinto/patch-sla-ansible">View on GitHub</a></div>
+<div class="term" role="figure" aria-label="Real output from the repo"><div class="bar"><span>python -m patchsla.sla tests/findings.json</span><span>real output, captured Nov 13, 2026</span></div><pre><span class="dim">$ python -m patchsla.sla tests/findings.json</span>
+<span class="ok">ok        critical  CVE-2026-0001    pcs-01         36.0h</span>
+<span class="bad">breached  critical  CVE-2026-0002    pcs-02         76.1h</span>
+open      high      CVE-2026-0003    hyp-01         28.1h
+1 of 3 outside SLA
+<span class="dim">$ echo $?</span>
+1</pre></div>
+</div>
+<section id="what"><div class="wrap"><h2>Four small tools that fit together.</h2><p class="lead">Patch carefully, check the real hardware, and keep evidence a reviewer can read.</p><div class="grid"><div class="card"><h3>SLA checker</h3><p>Reads detected and patched times per finding. Reports ok, late, open, or breached against 48 hours for critical. Exits 1 on a breach.</p><span class="f">patchsla/sla.py</span></div><div class="card"><h3>Patch role</h3><p>Security updates one host at a time, stops on the first failure, skips any host with a run in progress, reboots only when allowed.</p><span class="f">ansible/roles/patch</span></div><div class="card"><h3>Real-time check</h3><p>Asserts a PREEMPT_RT kernel, isolated CPUs, and the realtime tuned profile. Also a plain Bash version.</p><span class="f">roles/rt_check, scripts/rt-check.sh</span></div><div class="card"><h3>Proxmox VM playbook</h3><p>Clones a VM from a template on a Proxmox VE cluster with the community.proxmox collection.</p><span class="f">playbooks/proxmox_vm.yml</span></div><div class="card"><h3>Container and CI</h3><p>A Containerfile that works with Docker, Podman and Buildah, and a Jenkinsfile that runs tests, syntax checks and the SLA report.</p><span class="f">Containerfile, Jenkinsfile</span></div><div class="card"><h3>NIST mapping</h3><p>Which control each output is evidence for: SI-2, CM-2, CM-3, CM-6, AU-12. A mapping, not a compliance claim.</p><span class="f">docs/NIST_MAPPING.md</span></div></div></div></section>
+<section id="run"><div class="wrap"><h2>Run it from a clean checkout.</h2><p class="lead">Python 3 and pytest are enough to try the checker. Ansible is only needed for the playbooks.</p>
+<div class="cmd"><pre id="cmd">git clone https://github.com/gerardrecinto/patch-sla-ansible
+cd patch-sla-ansible
+python -m pytest -q tests
+python -m patchsla.sla tests/findings.json</pre><button class="copy" data-for="cmd" type="button">Copy</button></div></div></section>
+<section id="real"><div class="wrap"><h2>What is real, and what is not verified.</h2><p class="lead">Every claim on this page comes from a command that ran. Anything that did not run is listed on the right.</p>
+<div class="two"><div class="box g"><h3>Verified</h3><ul><li>5 pytest tests pass. The sample report exits 1 on the breached finding.</li><li>All three playbooks pass ansible-playbook --syntax-check.</li><li>shellcheck is clean on the real-time check script.</li></ul></div><div class="box a"><h3>Not verified</h3><ul><li>Nothing ran against real hosts, a Proxmox cluster, or a real-time kernel.</li><li>The reboot path and needs-restarting handling are untested.</li><li>The Containerfile and Jenkinsfile were not run.</li></ul></div></div></div></section>
+<section id="faq"><div class="wrap"><h2>Questions before you try it.</h2><details><summary>Why skip a host instead of patching it later?</summary><p>A flag file marks a host as mid-run. The role skips it and the SLA report keeps counting, so a skipped critical shows up as open and then breached. The delay is visible instead of silent.</p></details><details><summary>Is this a compliance tool?</summary><p>No. docs/NIST_MAPPING.md says which control each output supports as evidence. It does not claim an ATO or any audit result.</p></details><details><summary>Why 48 hours?</summary><p>It is the default for critical findings and is one dictionary in patchsla/sla.py. Change it there.</p></details></div></section>
+</main>
+<footer><div class="wrap"><span>Built by <a href="https://github.com/gerardrecinto">Gerard Recinto</a>. A personal lab project, not a product.</span><span><a href="https://github.com/gerardrecinto/patch-sla-ansible">Source</a> &middot; <a href="https://github.com/gerardrecinto/patch-sla-ansible/issues">Issues</a></span></div></footer>
+<script>
+document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){
+ var t=document.getElementById(b.getAttribute('data-for')).innerText;
+ (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)},function(){b.textContent='Select + copy'});
+});});
+</script>
+</body></html>
