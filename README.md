@@ -18,8 +18,3 @@ python -m patchsla.sla tests/findings.json
 
 - 5 pytest tests pass. The sample report exits 1 on the breached finding.
 - All three playbooks pass `ansible-playbook --syntax-check`. `shellcheck` is clean.
-
-## Not verified
-
-- Nothing ran against real hosts, a Proxmox cluster, or a real-time kernel. The reboot path and `needs-restarting` handling are untested.
-- The Containerfile and Jenkinsfile were not run.
